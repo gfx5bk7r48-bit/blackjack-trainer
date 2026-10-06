@@ -1,0 +1,714 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1220">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Blackjack Trainer: Voice Basic Strategy + Hi-Lo</title>
+<style>
+  :root{
+    --bg:#0b1220; --panel:#131c2e; --panel2:#1b2640; --text:#eef2ff; --muted:#93a1bd;
+    --me:#3b82f6; --dealer:#ef4444; --other:#64748b;
+    --hit:#22c55e; --stand:#ef4444; --double:#f59e0b; --split:#a855f7; --surr:#cbd5e1; --bj:#facc15;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  body{padding:env(safe-area-inset-top) 10px calc(env(safe-area-inset-bottom) + 10px);max-width:640px;margin:0 auto}
+  header{display:flex;align-items:center;gap:8px;padding:8px 0}
+  header h1{font-size:17px;margin:0;flex:1;font-weight:700;letter-spacing:.2px}
+  button{font:inherit;color:inherit;border:0;border-radius:12px;background:var(--panel2);cursor:pointer;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+  button:active{transform:scale(.97);filter:brightness(1.25)}
+  .iconbtn{padding:10px 12px;font-size:18px}
+  #micBtn{padding:10px 16px;font-size:16px;font-weight:700;background:#334155;min-width:120px}
+  #micBtn.on{background:#dc2626;animation:pulse 1.6s infinite}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,.6)}50%{box-shadow:0 0 0 8px rgba(220,38,38,0)}}
+  .panel{background:var(--panel);border-radius:16px;padding:12px;margin-bottom:10px}
+  #recBox{text-align:center;padding:14px 10px;border:3px solid #334155;transition:border-color .15s,background .15s}
+  #recWord{font-size:clamp(52px,17vw,104px);font-weight:900;line-height:1;letter-spacing:1px}
+  #recWhy{color:var(--muted);font-size:15px;margin-top:6px;min-height:20px}
+  #recDev{display:inline-block;margin-top:6px;padding:3px 10px;border-radius:999px;background:#7c3aed;color:#fff;font-size:13px;font-weight:700}
+  #insBox{margin-top:8px;font-weight:800;font-size:18px}
+  .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center}
+  .stat .v{font-size:26px;font-weight:800}
+  .stat .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+  #betRow{display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid #24314f}
+  #betVal{font-size:28px;font-weight:900;color:#4ade80}
+  #penWarn{display:none;margin-top:8px;padding:8px;border-radius:10px;background:#7f1d1d;font-weight:700;text-align:center}
+  .row{display:flex;align-items:center;gap:8px;margin:4px 0;flex-wrap:wrap}
+  .row .lbl{width:64px;color:var(--muted);font-size:13px;font-weight:700;text-transform:uppercase}
+  .chip{display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:46px;padding:0 6px;border-radius:8px;background:#f8fafc;color:#0f172a;font-weight:900;font-size:22px;border-bottom:4px solid var(--me)}
+  .chip.dealer{border-bottom-color:var(--dealer)}
+  .chip.small{min-width:28px;height:32px;font-size:15px;border-bottom-width:3px}
+  .chip.other{border-bottom-color:var(--other)}
+  .total{font-size:20px;font-weight:800;margin-left:4px}
+  .hands-mini{font-size:13px;color:var(--muted)}
+  .hands-mini b{color:var(--text)}
+  #heard{font-size:15px;min-height:22px}
+  #heard .q{color:#fbbf24}
+  #interim{color:var(--muted);font-style:italic;font-size:14px;min-height:18px}
+  #parsed{font-size:13px;color:var(--muted);min-height:18px}
+  .seg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px}
+  .seg button{padding:12px 4px;font-size:17px;font-weight:800;border:3px solid transparent}
+  .seg button.sel[data-o=me]{background:var(--me);border-color:#93c5fd}
+  .seg button.sel[data-o=dealer]{background:var(--dealer);border-color:#fca5a5}
+  .seg button.sel[data-o=other]{background:var(--other);border-color:#cbd5e1}
+  #cards{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+  #cards button{height:58px;font-size:25px;font-weight:900;background:#f1f5f9;color:#0f172a}
+  #cards button.ten{background:#e2e8f0}
+  .actions{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:8px}
+  .actions button{padding:12px 2px;font-size:14px;font-weight:700}
+  #recent{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
+  footer{color:var(--muted);font-size:12px;text-align:center;padding:10px 4px 20px}
+  #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#0f172a;border:1px solid #334155;padding:10px 16px;border-radius:12px;font-weight:700;opacity:0;transition:opacity .2s;pointer-events:none;z-index:50;max-width:90vw;text-align:center}
+  #toast.show{opacity:1}
+  /* settings */
+  #settings{position:fixed;inset:0;background:rgba(2,6,23,.85);display:none;z-index:40;overflow:auto;padding:16px}
+  #settings .sheet{background:var(--panel);border-radius:16px;padding:16px;max-width:560px;margin:0 auto}
+  #settings h2{margin:0 0 10px;font-size:20px}
+  #settings h3{margin:16px 0 6px;font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+  .field{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #22304d}
+  .field label{flex:1;font-size:15px}
+  .field small{display:block;color:var(--muted);font-size:12px}
+  .field input[type=number],.field input[type=text]{width:110px;padding:8px;border-radius:8px;border:1px solid #334155;background:#0b1220;color:var(--text);font-size:16px;text-align:right}
+  .field input[type=checkbox]{width:26px;height:26px}
+  .help{font-size:14px;line-height:1.45;color:#cbd5e1}
+  .help code{background:#0b1220;padding:1px 5px;border-radius:5px;color:#fbbf24}
+  .btnwide{width:100%;padding:14px;font-weight:800;font-size:16px;margin-top:12px;background:#2563eb}
+</style>
+</head>
+<body>
+<header>
+  <h1>🂡 BJ Trainer</h1>
+  <button id="micBtn" aria-label="Toggle voice input">🎤 Start voice</button>
+  <button class="iconbtn" id="spkBtn" aria-label="Toggle spoken advice">🔊</button>
+  <button class="iconbtn" id="setBtn" aria-label="Settings">⚙️</button>
+</header>
+
+<section class="panel" id="recBox">
+  <div id="recWord">—</div>
+  <div id="recWhy">Enter your two cards and the dealer's upcard</div>
+  <div id="recDev" style="display:none"></div>
+  <div id="insBox"></div>
+</section>
+
+<section class="panel">
+  <div class="grid4">
+    <div class="stat"><div class="v" id="rcVal">0</div><div class="l">Running</div></div>
+    <div class="stat"><div class="v" id="tcVal">0.0</div><div class="l">True count</div></div>
+    <div class="stat"><div class="v" id="dkVal">6.0</div><div class="l">Decks left</div></div>
+    <div class="stat"><div class="v" id="seenVal">0</div><div class="l">Cards seen</div></div>
+  </div>
+  <div id="betRow">
+    <div><div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px">Next bet</div><div id="betNote" style="font-size:12px;color:var(--muted)"></div></div>
+    <div id="betVal">1u</div>
+  </div>
+  <div id="penWarn">Cut card reached. Shuffle is due (say “new shoe”).</div>
+</section>
+
+<section class="panel">
+  <div class="row"><span class="lbl">Dealer</span><span id="dealerCards"></span></div>
+  <div class="row"><span class="lbl">Me</span><span id="myCards"></span><span class="total" id="myTotal"></span></div>
+  <div class="hands-mini" id="handsMini"></div>
+  <div style="margin-top:8px;border-top:1px solid #24314f;padding-top:8px">
+    <div id="heard"><span style="color:var(--muted)">Heard:</span> <span class="q" id="heardText">(nothing yet)</span></div>
+    <div id="interim"></div>
+    <div id="parsed"></div>
+  </div>
+  <div id="recent"></div>
+</section>
+
+<section class="panel">
+  <div class="seg" id="ownerSeg">
+    <button data-o="me">Mine</button>
+    <button data-o="dealer">Dealer</button>
+    <button data-o="other">Other</button>
+  </div>
+  <div id="cards"></div>
+  <div class="actions">
+    <button id="undoBtn">↶ Undo</button>
+    <button id="newHandBtn">New hand</button>
+    <button id="splitBtn">Split</button>
+    <button id="nextBtn">Next ▶</button>
+    <button id="newShoeBtn" style="background:#7f1d1d">New shoe</button>
+  </div>
+</section>
+
+<footer>For practice only. Using devices at casino tables is illegal in many jurisdictions.</footer>
+
+<div id="toast"></div>
+
+<div id="settings" role="dialog" aria-modal="true">
+  <div class="sheet">
+    <h2>Settings</h2>
+    <h3>Shoe</h3>
+    <div class="field"><label>Decks<small>Strategy tables are for 4–8 decks</small></label><input type="number" id="s_decks" min="1" max="8" step="1"></div>
+    <div class="field"><label>Penetration %<small>Where the cut card sits; warns when reached</small></label><input type="number" id="s_pen" min="30" max="95" step="1"></div>
+    <div class="field"><label>Burn cards<small>Unseen. They lower decks left but not the count</small></label><input type="number" id="s_burn" min="0" max="52" step="1"></div>
+    <h3>Rules</h3>
+    <div class="field"><label>Dealer hits soft 17 (H17)<small>Off = stands on soft 17 (S17)</small></label><input type="checkbox" id="s_h17"></div>
+    <div class="field"><label>Double after split (DAS)</label><input type="checkbox" id="s_das"></div>
+    <div class="field"><label>Late surrender</label><input type="checkbox" id="s_ls"></div>
+    <div class="field"><label>Max hands after splits</label><input type="number" id="s_maxHands" min="2" max="4" step="1"></div>
+    <h3>Counting</h3>
+    <div class="field"><label>Index plays (Illustrious 18 + Fab 4)<small>Deviations from basic strategy based on true count</small></label><input type="checkbox" id="s_dev"></div>
+    <div class="field"><label>Betting unit ($)</label><input type="number" id="s_unit" min="1" step="1"></div>
+    <div class="field"><label>Bet ramp (units)<small>For TC +2, +3, +4, +5 and up. TC ≤ +1 = 1 unit</small></label><input type="text" id="s_ramp" inputmode="decimal"></div>
+    <h3>Voice</h3>
+    <div class="field"><label>Speak recommendations aloud</label><input type="checkbox" id="s_speak"></div>
+    <h3>How to use</h3>
+    <div class="help">
+      Tap <b>🎤 Start voice</b> and allow the microphone. Then say:<br>
+      • <code>my card queen</code>, <code>my cards eight six</code>: your cards<br>
+      • <code>dealer card six</code> / <code>dealer six</code>: dealer's upcard (more dealer cards count but don't change advice)<br>
+      • <code>seven</code>, <code>king ace four</code>: other players' cards (count only)<br>
+      • One sentence can mix them: <code>my card jack five dealer nine</code>. Say <code>other</code> to switch back to other players' cards in the same breath.<br>
+      • <code>new hand</code> (count kept) · <code>new shoe</code> / <code>shuffle</code> (count reset) · <code>undo</code><br>
+      • <code>split</code> splits your pair; <code>next</code> or <code>stand</code> moves to your next split hand.<br>
+      Count: Hi-Lo (2–6 = +1, 7–9 = 0, 10/J/Q/K/A = −1). True count = running ÷ decks left, rounded down for bets and index plays.<br>
+      If the mic misbehaves, use the buttons: pick <b>Mine / Dealer / Other</b>, then tap cards.
+    </div>
+    <button class="btnwide" id="closeSet">Done</button>
+  </div>
+</div>
+
+<script>
+/*BJ-CORE-START*/
+var BJCore = (function () {
+  'use strict';
+  var RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+
+  function cardValue(r) {
+    if (r === 'A') return 11;
+    if (r === '10' || r === 'J' || r === 'Q' || r === 'K') return 10;
+    return parseInt(r, 10);
+  }
+  // Hi-Lo tag
+  function hiLo(r) {
+    var v = cardValue(r);
+    if (v >= 2 && v <= 6) return 1;
+    if (v >= 7 && v <= 9) return 0;
+    return -1;
+  }
+  function handInfo(cards) {
+    var total = 0, aces = 0;
+    for (var i = 0; i < cards.length; i++) { var v = cardValue(cards[i]); total += v; if (v === 11) aces++; }
+    while (total > 21 && aces > 0) { total -= 10; aces--; }
+    var pair = cards.length === 2 && cardValue(cards[0]) === cardValue(cards[1]);
+    return { total: total, soft: aces > 0, pair: pair, pairValue: pair ? cardValue(cards[0]) : null, n: cards.length, bust: total > 21 };
+  }
+
+  // ---- Raw basic strategy (4-8 decks). u = dealer upcard value 2..11 (11 = Ace).
+  // Codes: H hit, S stand, D double else hit, Ds double else stand, P split,
+  //        R surrender else hit, Rs surrender else stand, Rp surrender else split.
+  function rawHard(t, u, r) {
+    if (t <= 8) return 'H';
+    if (t === 9) return (u >= 3 && u <= 6) ? 'D' : 'H';
+    if (t === 10) return u <= 9 ? 'D' : 'H';
+    if (t === 11) return (u <= 10 || r.h17) ? 'D' : 'H';
+    if (t === 12) return (u >= 4 && u <= 6) ? 'S' : 'H';
+    if (t <= 14) return u <= 6 ? 'S' : 'H';
+    if (t === 15) { if (u <= 6) return 'S'; if (r.ls && (u === 10 || (r.h17 && u === 11))) return 'R'; return 'H'; }
+    if (t === 16) { if (u <= 6) return 'S'; if (r.ls && u >= 9) return 'R'; return 'H'; }
+    if (t === 17) return (r.ls && r.h17 && u === 11) ? 'Rs' : 'S';
+    return 'S';
+  }
+  function rawSoft(t, u, r) {
+    if (t <= 12) return 'H';
+    if (t <= 14) return (u === 5 || u === 6) ? 'D' : 'H';
+    if (t <= 16) return (u >= 4 && u <= 6) ? 'D' : 'H';
+    if (t === 17) return (u >= 3 && u <= 6) ? 'D' : 'H';
+    if (t === 18) {
+      if (u >= 3 && u <= 6) return 'Ds';
+      if (u === 2) return r.h17 ? 'Ds' : 'S';
+      if (u <= 8) return 'S';
+      return 'H';
+    }
+    if (t === 19) return (r.h17 && u === 6) ? 'Ds' : 'S';
+    return 'S';
+  }
+  // returns 'P', 'Rp' or null (= don't split, play as a total)
+  function rawPair(p, u, r) {
+    if (p === 11) return 'P';
+    if (p === 10 || p === 5) return null;
+    if (p === 9) return (u === 7 || u >= 10) ? null : 'P';
+    if (p === 8) return (r.h17 && r.ls && u === 11) ? 'Rp' : 'P';
+    if (p === 7) return u <= 7 ? 'P' : null;
+    if (p === 6) return r.das ? (u <= 6 ? 'P' : null) : ((u >= 3 && u <= 6) ? 'P' : null);
+    if (p === 4) return (r.das && (u === 5 || u === 6)) ? 'P' : null;
+    if (p === 2 || p === 3) return r.das ? (u <= 7 ? 'P' : null) : ((u >= 4 && u <= 7) ? 'P' : null);
+    return null;
+  }
+  function rawTotal(info, u, r) { return info.soft ? rawSoft(info.total, u, r) : rawHard(info.total, u, r); }
+  function rawAction(cards, up, rules) {
+    var info = handInfo(cards), u = cardValue(up);
+    if (info.pair) { var p = rawPair(info.pairValue, u, rules); if (p) return p; }
+    return rawTotal(info, u, rules);
+  }
+
+  // ---- Index plays (Hi-Lo, multi-deck). Source: Schlesinger, Blackjack Attack (Illustrious 18 + Fab 4),
+  // as reprinted at wizardofodds.com; H17 variants per bjinsider.com / blackjacktrainer.fyi.
+  function playIndices(r) {
+    return [
+      { t: 16, u: 10, i: 0, a: 'S', name: '16 vs 10' },
+      { t: 15, u: 10, i: 4, a: 'S', name: '15 vs 10' },
+      { t: 10, u: 10, i: 4, a: 'D', name: '10 vs 10' },
+      { t: 12, u: 3, i: 2, a: 'S', name: '12 vs 3' },
+      { t: 12, u: 2, i: 3, a: 'S', name: '12 vs 2' },
+      { t: 11, u: 11, i: r.h17 ? -1 : 1, a: 'D', name: '11 vs A' },
+      { t: 9, u: 2, i: 1, a: 'D', name: '9 vs 2' },
+      { t: 10, u: 11, i: r.h17 ? 3 : 4, a: 'D', name: '10 vs A' },
+      { t: 9, u: 7, i: 3, a: 'D', name: '9 vs 7' },
+      { t: 16, u: 9, i: 5, a: 'S', name: '16 vs 9' },
+      { t: 13, u: 2, i: -1, a: 'S', name: '13 vs 2' },
+      { t: 12, u: 4, i: 0, a: 'S', name: '12 vs 4' },
+      { t: 12, u: 5, i: -2, a: 'S', name: '12 vs 5' },
+      { t: 12, u: 6, i: r.h17 ? -3 : -1, a: 'S', name: '12 vs 6' },
+      { t: 13, u: 3, i: -2, a: 'S', name: '13 vs 3' }
+    ];
+  }
+  function surrenderIndices(r) {
+    return [
+      { t: 14, u: 10, i: 3, name: '14 vs 10' },
+      { t: 15, u: 10, i: 0, name: '15 vs 10' },
+      { t: 15, u: 9, i: 2, name: '15 vs 9' },
+      { t: 15, u: 11, i: r.h17 ? -1 : 1, name: '15 vs A' }
+    ];
+  }
+  var WORD = { H: 'HIT', S: 'STAND', D: 'DOUBLE', P: 'SPLIT', R: 'SURRENDER' };
+  function fmtIdx(i) { return i > 0 ? '+' + i : String(i); }
+  function upLabel(up) { var v = cardValue(up); return v === 11 ? 'A' : String(v); }
+
+  // hand: {cards:[...], split:bool}; rules: {h17,das,ls,dev,canSplitMore}; tc: floored true count (number) or null
+  function decide(hand, up, rules, tc) {
+    var cards = hand.cards || [];
+    if (!up || cards.length < 2) return null;
+    var info = handInfo(cards), u = cardValue(up), split = !!hand.split;
+    var label = (info.pair ? 'Pair of ' + (info.pairValue === 11 ? 'A' : info.pairValue) + 's' : (info.soft ? 'Soft ' : 'Hard ') + info.total) + ' vs ' + upLabel(up);
+    if (info.bust) return { action: 'BUST', code: null, label: 'Busted with ' + info.total, deviation: null };
+    if (info.total === 21) {
+      if (cards.length === 2 && !split) return { action: 'BLACKJACK', code: null, label: 'Blackjack!', deviation: null };
+      return { action: 'STAND', code: 'S', label: '21 vs ' + upLabel(up), deviation: null };
+    }
+    var canDouble = cards.length === 2 && (!split || !!rules.das);
+    var canSplit = info.pair && cards.length === 2 && rules.canSplitMore !== false;
+    var canSur = !!rules.ls && cards.length === 2 && !split;
+    var code = rawAction(cards, up, rules);
+    if ((code === 'P' || code === 'Rp') && !canSplit) code = rawTotal(info, u, rules);
+    if (!canSur) { if (code === 'R') code = 'H'; else if (code === 'Rs') code = 'S'; else if (code === 'Rp') code = 'P'; }
+    var basicCode = code, dev = null;
+
+    if (rules.dev && typeof tc === 'number' && isFinite(tc)) {
+      if (info.pair && info.pairValue === 10 && canSplit) {
+        if (u === 5) { code = tc >= 5 ? 'P' : 'S'; dev = { name: '10,10 vs 5', idx: 5, active: tc >= 5, play: 'SPLIT' }; }
+        if (u === 6) { code = tc >= 4 ? 'P' : 'S'; dev = { name: '10,10 vs 6', idx: 4, active: tc >= 4, play: 'SPLIT' }; }
+      } else if (!info.soft && code !== 'P' && code !== 'Rp') {
+        var t = info.total, k;
+        if (canSur) {
+          var sl = surrenderIndices(rules);
+          for (k = 0; k < sl.length; k++) if (sl[k].t === t && sl[k].u === u) {
+            dev = { name: sl[k].name, idx: sl[k].i, active: tc >= sl[k].i, play: 'SURRENDER' };
+            code = tc >= sl[k].i ? 'R' : 'H';
+          }
+        }
+        if (code !== 'R' && code !== 'Rs') {
+          var pl = playIndices(rules);
+          for (k = 0; k < pl.length; k++) if (pl[k].t === t && pl[k].u === u) {
+            dev = { name: pl[k].name, idx: pl[k].i, active: tc >= pl[k].i, play: WORD[pl[k].a] };
+            code = tc >= pl[k].i ? pl[k].a : 'H';
+          }
+        }
+      }
+    }
+    // resolve availability
+    var act;
+    if (code === 'D') act = canDouble ? 'D' : 'H';
+    else if (code === 'Ds') act = canDouble ? 'D' : 'S';
+    else if (code === 'Rs' || code === 'R') act = 'R';
+    else if (code === 'Rp') act = 'R';
+    else act = code;
+    var deviates = dev && code !== basicCode;
+    return {
+      action: WORD[act], code: act, raw: code, basic: basicCode, label: label,
+      deviation: dev ? { name: dev.name, idx: dev.idx, active: dev.active, play: dev.play, changed: !!deviates,
+        text: dev.name + ': ' + dev.play + ' at TC ' + fmtIdx(dev.idx) + (dev.active ? ' ✓' : '') } : null
+    };
+  }
+  function insurance(up, rules, tc) {
+    if (!up || cardValue(up) !== 11 || !rules.dev || typeof tc !== 'number') return null;
+    return tc >= 3;
+  }
+
+  // ---- Shoe math
+  function shoeStats(s, rc, seen) {
+    var total = s.decks * 52;
+    var remaining = Math.max(0, total - seen - (s.burn || 0));
+    var decksLeft = Math.max(remaining / 52, 0.25);
+    var tc = rc / decksLeft;
+    var tcFloor = Math.floor(tc + 1e-9);
+    var penReached = (seen + (s.burn || 0)) >= total * (s.pen / 100);
+    return { total: total, remaining: remaining, decksLeft: decksLeft, tc: tc, tcFloor: tcFloor, penReached: penReached };
+  }
+  function parseRamp(str) {
+    var a = String(str || '').split(/[,\s]+/).map(Number).filter(function (x) { return isFinite(x) && x > 0; });
+    return a.length ? a : [2, 4, 6, 8];
+  }
+  function betUnits(tcFloor, ramp) {
+    if (tcFloor < 2) return 1;
+    return ramp[Math.min(tcFloor - 2, ramp.length - 1)];
+  }
+
+  // ---- Phrase parser
+  var CARD_WORDS = {
+    ace: 'A', aces: 'A', ase: 'A',
+    two: '2', twos: '2', to: '2', too: '2', tu: '2',
+    three: '3', threes: '3', tree: '3',
+    four: '4', fours: '4', for: '4', fore: '4',
+    five: '5', fives: '5',
+    six: '6', sixes: '6', sicks: '6',
+    seven: '7', sevens: '7',
+    eight: '8', eights: '8', ate: '8',
+    nine: '9', nines: '9', nein: '9',
+    ten: '10', tens: '10',
+    jack: 'J', jacks: 'J', jak: 'J',
+    queen: 'Q', queens: 'Q', quinn: 'Q',
+    king: 'K', kings: 'K',
+    face: '10', faces: '10', picture: '10'
+  };
+  var OWNER_WORDS = {
+    my: 'me', mine: 'me', me: 'me', i: 'me', im: 'me', ive: 'me', myself: 'me',
+    dealer: 'dealer', dealers: 'dealer', deal: 'dealer', house: 'dealer', upcard: 'dealer',
+    other: 'other', others: 'other', table: 'other', player: 'other', players: 'other', them: 'other'
+  };
+  var PHRASES = [
+    [['new', 'hand'], 'newHand'], [['new', 'round'], 'newHand'], [['next', 'round'], 'newHand'],
+    [['clear', 'hand'], 'newHand'], [['reset', 'hand'], 'newHand'], [['new', 'deal'], 'newHand'],
+    [['next', 'hand'], 'nextHand'],
+    [['new', 'shoe'], 'newShoe'], [['new', 'shoes'], 'newShoe'], [['new', 'show'], 'newShoe'], [['new', 'shoo'], 'newShoe'],
+    [['new', 'deck'], 'newShoe'], [['reset', 'shoe'], 'newShoe'], [['reset', 'count'], 'newShoe'],
+    [['go', 'back'], 'undo'], [['scratch', 'that'], 'undo'],
+    [['next', 'split'], 'next'], [['second', 'hand'], 'next'], [['other', 'hand'], 'next'],
+    [['double', 'down'], 'double'], [['up', 'card'], '@dealer']
+  ];
+  var SINGLE = {
+    shuffle: 'newShoe', reshuffle: 'newShoe', shuffled: 'newShoe',
+    undo: 'undo', oops: 'undo', delete: 'undo',
+    split: 'split', splits: 'split', splitting: 'split',
+    next: 'next',
+    hit: 'hit', stand: 'stand', stay: 'stand', double: 'double', surrender: 'surrender', insurance: 'insurance'
+  };
+  function numberToCards(tok) {
+    var out = [], i = 0;
+    while (i < tok.length) {
+      if (tok.substr(i, 2) === '10') { out.push('10'); i += 2; continue; }
+      var d = tok.charAt(i);
+      if (d >= '2' && d <= '9') out.push(d);
+      i++;
+    }
+    return out;
+  }
+  function tokenize(text) {
+    return String(text || '').toLowerCase()
+      .replace(/[’']/g, '')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/).filter(Boolean);
+  }
+  // Returns array of events: {type:'card', rank, owner} | {type:'cmd', cmd}
+  function parsePhrase(text, defaultOwner) {
+    var toks = tokenize(text), ev = [], owner = defaultOwner || 'other';
+    for (var i = 0; i < toks.length; i++) {
+      var matched = false;
+      for (var p = 0; p < PHRASES.length; p++) {
+        var ph = PHRASES[p][0];
+        if (toks[i] === ph[0] && toks[i + 1] === ph[1]) {
+          var c = PHRASES[p][1];
+          if (c === '@dealer') owner = 'dealer'; else ev.push({ type: 'cmd', cmd: c });
+          i += 1; matched = true; break;
+        }
+      }
+      if (matched) continue;
+      var w = toks[i];
+      if (OWNER_WORDS[w]) { owner = OWNER_WORDS[w]; continue; }
+      if (SINGLE[w]) { ev.push({ type: 'cmd', cmd: SINGLE[w] }); continue; }
+      if (CARD_WORDS[w]) { ev.push({ type: 'card', rank: CARD_WORDS[w], owner: owner }); continue; }
+      var m = /^(\d+)s?$/.exec(w);
+      if (m) {
+        var cs = numberToCards(m[1]);
+        for (var j = 0; j < cs.length; j++) ev.push({ type: 'card', rank: cs[j], owner: owner });
+        continue;
+      }
+      if (w.length > 2 && w.charAt(w.length - 1) === 's' && CARD_WORDS[w.slice(0, -1)]) {
+        ev.push({ type: 'card', rank: CARD_WORDS[w.slice(0, -1)], owner: owner });
+      }
+      // everything else (card, is, a, the, won, one, ...) is ignored
+    }
+    return ev;
+  }
+
+  var api = {
+    RANKS: RANKS, cardValue: cardValue, hiLo: hiLo, handInfo: handInfo,
+    rawHard: rawHard, rawSoft: rawSoft, rawPair: rawPair, rawAction: rawAction,
+    decide: decide, insurance: insurance, shoeStats: shoeStats, parseRamp: parseRamp, betUnits: betUnits,
+    parsePhrase: parsePhrase, tokenize: tokenize, playIndices: playIndices, surrenderIndices: surrenderIndices
+  };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  return api;
+})();
+/*BJ-CORE-END*/
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var C = BJCore;
+  var DEFAULTS = { decks: 6, pen: 75, burn: 6, unit: 10, ramp: '2,4,6,8', h17: false, das: true, ls: false, dev: true, speak: true, maxHands: 4, owner: 'me' };
+  function load(k, d) { try { var v = JSON.parse(localStorage.getItem(k)); return v || d; } catch (e) { return d; } }
+  function save() {
+    try {
+      localStorage.setItem('bjt_settings', JSON.stringify(S));
+      localStorage.setItem('bjt_state', JSON.stringify(G));
+      localStorage.setItem('bjt_hist', JSON.stringify(H.slice(-60)));
+    } catch (e) {}
+  }
+  function fresh() { return { rc: 0, seen: 0, hands: [{ cards: [], split: false }], active: 0, dealer: [], recent: [] }; }
+  var S = Object.assign({}, DEFAULTS, load('bjt_settings', {}));
+  var G = Object.assign(fresh(), load('bjt_state', {}));
+  var H = load('bjt_hist', []);
+  if (!Array.isArray(G.hands) || !G.hands.length) G.hands = [{ cards: [], split: false }];
+
+  var $ = function (id) { return document.getElementById(id); };
+  function toast(msg) { var t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(function () { t.classList.remove('show'); }, 1600); }
+  function snap() { H.push(JSON.stringify(G)); if (H.length > 200) H.shift(); }
+  function rules() { return { h17: S.h17, das: S.das, ls: S.ls, dev: S.dev, canSplitMore: G.hands.length < S.maxHands }; }
+  function curHand() { return G.hands[G.active] || G.hands[0]; }
+
+  // ---------- events ----------
+  function applyEvent(e) {
+    if (e.type === 'cmd' && e.cmd === 'undo') {
+      if (!H.length) { toast('Nothing to undo'); return 'undo (nothing)'; }
+      G = JSON.parse(H.pop()); return 'undo';
+    }
+    if (e.type === 'card') {
+      snap();
+      G.rc += C.hiLo(e.rank); G.seen++;
+      if (e.owner === 'me') curHand().cards.push(e.rank);
+      else if (e.owner === 'dealer') G.dealer.push(e.rank);
+      G.recent.push({ r: e.rank, o: e.owner }); if (G.recent.length > 24) G.recent.shift();
+      return (e.owner === 'me' ? 'Mine ' : e.owner === 'dealer' ? 'Dealer ' : '') + e.rank;
+    }
+    switch (e.cmd) {
+      case 'newHand':
+        snap(); G.hands = [{ cards: [], split: false }]; G.active = 0; G.dealer = []; lastSpoken = ''; return 'new hand';
+      case 'nextHand':
+        if (G.active < G.hands.length - 1) { snap(); G.active++; return 'next split hand'; }
+        snap(); G.hands = [{ cards: [], split: false }]; G.active = 0; G.dealer = []; lastSpoken = ''; return 'new hand';
+      case 'newShoe':
+        snap(); G = fresh(); lastSpoken = ''; return 'NEW SHOE (count reset)';
+      case 'split': {
+        var h = curHand(), info = C.handInfo(h.cards);
+        if (!info.pair) { toast('Split needs a pair'); return 'split (no pair)'; }
+        if (G.hands.length >= S.maxHands) { toast('Max hands reached'); return 'split (max hands)'; }
+        snap();
+        G.hands.splice(G.active, 1, { cards: [h.cards[0]], split: true }, { cards: [h.cards[1]], split: true });
+        return 'split';
+      }
+      case 'next': case 'stand':
+        if (G.active < G.hands.length - 1) { snap(); G.active++; return e.cmd + ' → next hand'; }
+        return e.cmd;
+      default:
+        return e.cmd; // hit / double / surrender / insurance are acknowledged only
+    }
+  }
+  function applyEvents(evs) {
+    var out = [];
+    evs.forEach(function (e) { out.push(applyEvent(e)); });
+    render(); save();
+    return out;
+  }
+
+  // ---------- render ----------
+  var lastSpoken = '';
+  var COLORS = { HIT: 'var(--hit)', STAND: 'var(--stand)', DOUBLE: 'var(--double)', SPLIT: 'var(--split)', SURRENDER: 'var(--surr)', BLACKJACK: 'var(--bj)', BUST: '#64748b' };
+  function chip(r, cls) { return '<span class="chip ' + (cls || '') + '">' + r + '</span>'; }
+  function render() {
+    var st = C.shoeStats(S, G.rc, G.seen);
+    $('rcVal').textContent = (G.rc > 0 ? '+' : '') + G.rc;
+    $('tcVal').textContent = (st.tc > 0 ? '+' : '') + st.tc.toFixed(1);
+    $('tcVal').style.color = st.tcFloor >= 2 ? '#4ade80' : st.tcFloor <= -1 ? '#f87171' : '';
+    $('dkVal').textContent = st.decksLeft.toFixed(1);
+    $('seenVal').textContent = G.seen;
+    var units = C.betUnits(st.tcFloor, C.parseRamp(S.ramp));
+    $('betVal').textContent = '$' + (units * S.unit) + ' (' + units + 'u)';
+    $('betNote').textContent = 'TC ' + (st.tcFloor > 0 ? '+' : '') + st.tcFloor + ' (rounded down)' + (st.tcFloor <= -2 ? ' · cold shoe' : '');
+    $('penWarn').style.display = st.penReached ? 'block' : 'none';
+
+    var up = G.dealer[0] || null;
+    $('dealerCards').innerHTML = G.dealer.length ? G.dealer.map(function (r, i) { return chip(r, 'dealer' + (i ? ' small' : '')); }).join(' ') : '<span style="color:var(--muted)">no upcard</span>';
+    var h = curHand();
+    $('myCards').innerHTML = h.cards.length ? h.cards.map(function (r) { return chip(r); }).join(' ') : '<span style="color:var(--muted)">no cards</span>';
+    var info = C.handInfo(h.cards);
+    $('myTotal').textContent = h.cards.length ? ((info.soft && info.total < 21 ? 'Soft ' : '') + info.total) : '';
+    if (G.hands.length > 1) {
+      $('handsMini').innerHTML = 'Split hands: ' + G.hands.map(function (x, i) {
+        var t = x.cards.length ? x.cards.join(' ') + ' (' + C.handInfo(x.cards).total + ')' : '…';
+        return i === G.active ? '<b>▶ ' + t + '</b>' : t;
+      }).join(' · ') + ' &nbsp;(say “next”)';
+    } else $('handsMini').textContent = '';
+
+    $('recent').innerHTML = G.recent.slice(-16).map(function (c) { return chip(c.r, 'small ' + (c.o === 'me' ? '' : c.o)); }).join('');
+
+    var d = C.decide(h, up, rules(), st.tcFloor);
+    var box = $('recBox'), word = $('recWord');
+    if (d) {
+      word.textContent = d.action; word.style.color = COLORS[d.action] || '';
+      box.style.borderColor = COLORS[d.action] || '#334155';
+      $('recWhy').textContent = d.label + (d.code === 'H' && d.basic === 'D' ? ' · double not allowed now' : '');
+      if (d.deviation) { $('recDev').style.display = 'inline-block'; $('recDev').textContent = (d.deviation.changed ? 'INDEX PLAY · ' : 'index · ') + d.deviation.text; $('recDev').style.background = d.deviation.changed ? '#7c3aed' : '#334155'; }
+      else $('recDev').style.display = 'none';
+    } else {
+      word.textContent = '—'; word.style.color = ''; box.style.borderColor = '#334155';
+      $('recWhy').textContent = !up && h.cards.length < 2 ? 'Enter your two cards and the dealer\'s upcard' : !up ? 'Waiting for dealer upcard' : 'Waiting for your second card';
+      $('recDev').style.display = 'none';
+    }
+    var ins = C.insurance(up, rules(), st.tcFloor);
+    $('insBox').innerHTML = ins === null ? '' : ins ? '<span style="color:#4ade80">TAKE INSURANCE (TC ≥ +3)</span>' : '<span style="color:var(--muted)">No insurance</span>';
+
+    // owner seg / toggles
+    Array.prototype.forEach.call(document.querySelectorAll('#ownerSeg button'), function (b) { b.classList.toggle('sel', b.dataset.o === S.owner); });
+    $('spkBtn').textContent = S.speak ? '🔊' : '🔇';
+
+    // speak
+    if (d && S.speak) {
+      var key = G.active + '|' + h.cards.join(',') + '|' + up + '|' + d.action;
+      if (key !== lastSpoken) {
+        lastSpoken = key;
+        // speak whenever the advice is (re)computed for a new card
+        say(d.action === 'BLACKJACK' ? 'Blackjack' : d.action.charAt(0) + d.action.slice(1).toLowerCase() + (ins ? '. Take insurance' : ''));
+      }
+    }
+  }
+
+  // ---------- speech synthesis ----------
+  var ignoreUntil = 0;
+  function say(text) {
+    if (!('speechSynthesis' in window)) return;
+    try {
+      window.speechSynthesis.cancel();
+      var u = new SpeechSynthesisUtterance(text);
+      u.lang = 'en-US'; u.rate = 1.1;
+      ignoreUntil = Date.now() + 2500;
+      u.onend = function () { ignoreUntil = Date.now() + 700; };
+      window.speechSynthesis.speak(u);
+    } catch (e) {}
+  }
+  function primeTTS() { try { var u = new SpeechSynthesisUtterance(' '); u.volume = 0; window.speechSynthesis.speak(u); } catch (e) {} }
+
+  // ---------- speech recognition ----------
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var isIOS = /iP(hone|ad|od)/.test(navigator.platform) || (navigator.userAgent.indexOf('Mac') > -1 && 'ontouchend' in document);
+  var want = false, recog = null, lastFinal = { t: '', at: 0 }, wakeLock = null;
+  function setMicUI() { var b = $('micBtn'); b.classList.toggle('on', want); b.textContent = want ? '🎙️ Listening' : '🎤 Start voice'; }
+  function handleFinal(text) {
+    text = String(text || '').trim(); if (!text) return;
+    var now = Date.now();
+    if (now < ignoreUntil || (window.speechSynthesis && window.speechSynthesis.speaking)) {
+      $('heardText').textContent = text + '  (ignored: app was speaking)'; return;
+    }
+    if (text.toLowerCase() === lastFinal.t && now - lastFinal.at < 1200) return; // duplicate final result
+    lastFinal = { t: text.toLowerCase(), at: now };
+    $('heardText').textContent = text;
+    var evs = C.parsePhrase(text, 'other');
+    if (!evs.length) { $('parsed').textContent = '→ nothing recognized'; return; }
+    var out = applyEvents(evs);
+    $('parsed').textContent = '→ ' + out.join(' · ');
+  }
+  function startRecog() {
+    try {
+      recog = new SR();
+      recog.lang = 'en-US';
+      recog.continuous = !isIOS;   // iOS Safari is more reliable in single-utterance mode + auto-restart
+      recog.interimResults = true;
+      recog.maxAlternatives = 1;
+      var done = {};
+      recog.onresult = function (e) {
+        var interim = '';
+        for (var i = e.resultIndex; i < e.results.length; i++) {
+          var r = e.results[i];
+          if (r.isFinal) { if (done[i]) continue; done[i] = 1; handleFinal(r[0].transcript); }
+          else interim += r[0].transcript;
+        }
+        $('interim').textContent = interim ? '… ' + interim : '';
+      };
+      recog.onerror = function (e) {
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+          want = false; setMicUI();
+          toast(isIOS ? 'Mic/Speech blocked. Enable Siri & Dictation and allow mic for this site.' : 'Microphone permission denied');
+        } else if (e.error === 'audio-capture') { want = false; setMicUI(); toast('No microphone found'); }
+      };
+      recog.onend = function () {
+        $('interim').textContent = '';
+        if (want) setTimeout(function () { if (want) startRecog(); }, 150);
+        else setMicUI();
+      };
+      recog.start();
+    } catch (err) {
+      if (want) setTimeout(function () { if (want) startRecog(); }, 600);
+    }
+  }
+  function toggleMic() {
+    if (!SR) { toast('Voice input not supported in this browser. Use the buttons.'); return; }
+    want = !want; setMicUI();
+    if (want) {
+      primeTTS(); startRecog();
+      if (navigator.wakeLock) navigator.wakeLock.request('screen').then(function (w) { wakeLock = w; }).catch(function () {});
+    } else {
+      try { recog && recog.stop(); } catch (e) {}
+      try { wakeLock && wakeLock.release(); } catch (e) {} wakeLock = null;
+    }
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && want && navigator.wakeLock) navigator.wakeLock.request('screen').then(function (w) { wakeLock = w; }).catch(function () {});
+  });
+
+  // ---------- UI wiring ----------
+  var cardsEl = $('cards');
+  C.RANKS.forEach(function (r) {
+    var b = document.createElement('button'); b.textContent = r; if (C.cardValue(r) === 10) b.className = 'ten';
+    b.addEventListener('click', function () {
+      var out = applyEvents([{ type: 'card', rank: r, owner: S.owner }]);
+      $('parsed').textContent = '→ (tap) ' + out.join(' · ');
+    });
+    cardsEl.appendChild(b);
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('#ownerSeg button'), function (b) {
+    b.addEventListener('click', function () { S.owner = b.dataset.o; render(); save(); });
+  });
+  function cmdBtn(id, cmd) { $(id).addEventListener('click', function () { var out = applyEvents([{ type: 'cmd', cmd: cmd }]); $('parsed').textContent = '→ (tap) ' + out.join(' · '); }); }
+  cmdBtn('undoBtn', 'undo'); cmdBtn('newHandBtn', 'newHand'); cmdBtn('splitBtn', 'split'); cmdBtn('nextBtn', 'next');
+  $('newShoeBtn').addEventListener('click', function () { if (confirm('Start a new shoe? This resets the count.')) { applyEvents([{ type: 'cmd', cmd: 'newShoe' }]); toast('New shoe'); } });
+  $('micBtn').addEventListener('click', toggleMic);
+  $('spkBtn').addEventListener('click', function () { S.speak = !S.speak; if (S.speak) primeTTS(); else try { speechSynthesis.cancel(); } catch (e) {} render(); save(); });
+
+  var FIELDS = ['decks', 'pen', 'burn', 'unit', 'ramp', 'h17', 'das', 'ls', 'dev', 'speak', 'maxHands'];
+  function fillSettings() { FIELDS.forEach(function (f) { var el = $('s_' + f); if (el.type === 'checkbox') el.checked = !!S[f]; else el.value = S[f]; }); }
+  FIELDS.forEach(function (f) {
+    $('s_' + f).addEventListener('change', function (ev) {
+      var el = ev.target;
+      if (el.type === 'checkbox') S[f] = el.checked;
+      else if (el.type === 'number') { var n = parseFloat(el.value); if (isFinite(n)) S[f] = n; }
+      else S[f] = el.value;
+      S.decks = Math.min(8, Math.max(1, Math.round(S.decks))); S.maxHands = Math.min(4, Math.max(2, Math.round(S.maxHands)));
+      lastSpoken = ''; render(); save();
+    });
+  });
+  $('setBtn').addEventListener('click', function () { fillSettings(); $('settings').style.display = 'block'; });
+  $('closeSet').addEventListener('click', function () { $('settings').style.display = 'none'; });
+
+  window.__bjt = { simulateSpeech: handleFinal, state: function () { return JSON.parse(JSON.stringify(G)); } }; // test hook
+  if (!SR) $('heardText').textContent = '(voice input not supported here; use buttons)';
+  render();
+})();
+</script>
+</body>
+</html>
