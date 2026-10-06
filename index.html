@@ -463,7 +463,7 @@ var BJCore = (function () {
 (function () {
   'use strict';
   var C = BJCore;
-  var DEFAULTS = { decks: 6, pen: 75, burn: 6, unit: 10, ramp: '2,4,6,8', h17: false, das: true, ls: false, dev: true, speak: true, maxHands: 4, owner: 'me' };
+  var DEFAULTS = { decks: 8, pen: 75, burn: 6, unit: 10, ramp: '2,4,6,8', h17: false, das: true, ls: false, dev: true, speak: true, maxHands: 4, owner: 'me' };
   function load(k, d) { try { var v = JSON.parse(localStorage.getItem(k)); return v || d; } catch (e) { return d; } }
   function save() {
     try {
