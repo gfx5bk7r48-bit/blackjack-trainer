@@ -255,6 +255,127 @@ const PT = [
 for (const [t, exp] of PT) eq(P(t), exp, `parse "${t}"`);
 eq(C.parsePhrase('queen', 'me')[0].owner, 'me', 'default owner param respected');
 
+
+// ---------------- Split workflow (state machine) ----------------
+{
+  const SET = (o = {}) => Object.assign({ decks: 8, pen: 75, burn: 6, h17: false, das: true, ls: false, dev: false, maxHands: 4, hitSplitAces: false, resplitAces: false }, o);
+  function session(settings) {
+    let G = C.freshState(); const H = [];
+    const say = (text, s = settings) => { for (const e of C.parsePhrase(text, 'other')) G = C.step(G, H, e, s).G; return G; };
+    const adv = (i = G.active) => C.handAdvice(G, i, settings, 0);
+    const act = (i = G.active) => { const a = adv(i); return a.state === 'advice' ? a.d.action : a.state.toUpperCase(); };
+    return { say, adv, act, get G() { return G; }, H };
+  }
+  // pair split, DAS double advice, double auto-advance, resplit
+  let t = session(SET());
+  t.say('my cards eight eight dealer six');
+  eq(t.act(), 'SPLIT', 'split flow: 8,8 v6 -> SPLIT');
+  t.say('split');
+  eq(t.G.hands.map(h => h.cards), [['8'], ['8']], 'split creates 2 hands with one 8 each');
+  eq(t.G.active, 0, 'split: Hand 1 active');
+  eq(t.adv().state, 'waiting', 'Hand 1 waits for 2nd card');
+  t.say('my card three');
+  eq(t.G.hands[0].cards, ['8', '3'], "'my card' goes to active hand");
+  eq(t.act(), 'DOUBLE', 'Hand 1: 11 v6 -> DOUBLE (DAS)');
+  t.say('double');
+  eq(t.adv().state, 'doubling', 'double marks hand as doubling');
+  eq(t.G.active, 0, 'no advance until double card arrives');
+  t.say('my card ten');
+  eq([t.G.hands[0].done, t.G.hands[0].status, t.G.active], [true, 'doubled', 1], 'double card ends Hand 1 and advances to Hand 2');
+  t.say('my card eight');
+  eq(t.act(), 'SPLIT', 'Hand 2: 8,8 -> SPLIT again');
+  t.say('split');
+  eq(t.G.hands.map(h => h.cards), [['8', '3', '10'], ['8'], ['8']], 'resplit inserts Hand 3 right after current');
+  eq(t.G.active, 1, 'resplit keeps current hand active');
+  t.say('my card five');
+  eq(t.act(), 'STAND', 'Hand 2: 13 v6 -> STAND');
+  t.say('stand');
+  eq([t.G.hands[1].status, t.G.active], ['stand', 2], "'stand' finishes Hand 2 -> Hand 3");
+  t.say('my card two');
+  eq(t.act(), 'DOUBLE', 'Hand 3: 10 v6 -> DOUBLE');
+  eq(t.adv(0).state, 'done', 'summary: Hand 1 done');
+  t.say('hit');
+  eq(t.G.active, 2, "'hit' does not advance");
+  t.say('my card ace');
+  eq([t.G.hands[2].status, C.allDone(t.G)], ['21', true], 'Hand 3 hits 21 (8,2,A) -> done, all hands done');
+  t.say('dealer ten');
+  eq(t.G.dealer, ['6', '10'], 'dealer cards still tracked after split');
+  t.say('my card queen');
+  eq([t.G.hands.length, t.G.hands[0].cards, t.G.dealer], [1, ['Q'], []], 'card after all hands done starts a new round');
+  // undo reverses: new round, card, dealer, 21-advance, hit no-op, splits
+  t.say('undo'); eq([t.G.hands.length, t.G.dealer], [3, ['6', '10']], 'undo reverses auto new round');
+  t.say('undo'); t.say('undo');
+  eq([t.G.active, t.G.hands[2].cards, t.G.hands[2].done], [2, ['8', '2'], false], 'undo reverses 21 auto-finish');
+  t.say('undo'); t.say('undo'); t.say('undo');
+  eq([t.G.active, t.G.hands[1].done, t.G.hands[1].cards], [1, false, ['8']], 'undo reverses stand/advance and card');
+  t.say('undo');
+  eq(t.G.hands.map(h => h.cards), [['8', '3', '10'], ['8', '8']], 'undo reverses resplit');
+  t.say('undo'); t.say('undo');
+  eq([t.G.active, t.G.hands[0].done, t.G.hands[0].doubled], [0, false, true], 'undo reverses double-card advance');
+  t.say('undo'); t.say('undo'); t.say('undo');
+  eq([t.G.hands.length, t.G.hands[0].cards], [1, ['8', '8']], 'undo reverses the original split');
+  eq(t.G.rc, C.hiLo('8') * 2 + C.hiLo('6'), 'running count restored by undo');
+
+  // bust auto-advances; DAS off -> no double after split
+  t = session(SET({ das: false }));
+  t.say('my card nine nine dealer card five split');
+  t.say('my card two');
+  eq(t.act(), 'HIT', 'no DAS: split 9,2 (11) v5 -> HIT');
+  t.say('my card three');
+  eq(t.G.active, 0, 'hit card (14) stays on Hand 1');
+  t.say('my card king');
+  eq([t.G.hands[0].status, t.G.active], ['bust', 1], 'bust auto-advances');
+  t.say('my card seven');
+  eq(t.act(), 'STAND', 'Hand 2: 16 v5 STAND');
+  t.say('next');
+  eq(C.allDone(t.G), true, "'next' on last hand finishes it");
+  t.say('next');
+  eq(t.G.hands[1].status, 'stand', "extra 'next' is ignored");
+
+  // surrender not allowed after split
+  t = session(SET({ ls: true }));
+  t.say('my card eight eight dealer ten split my card eight');
+  eq(t.act(), 'SPLIT', 'Hand 1: 8,8 v10 -> resplit allowed');
+  t.say('next my card queen');
+  eq(t.G.active, 1, 'next moves to Hand 2');
+  eq(t.act(), 'STAND', 'Hand 2: 8,Q (18) v10 STAND');
+  t = session(SET({ ls: true }));
+  t.say('my card eight eight dealer ten split my card six');
+  eq(t.act(), 'HIT', 'split hand 14 v10 with LS -> HIT (no surrender after split)');
+  t = session(SET({ ls: true, maxHands: 2 }));
+  t.say('my card eight eight dealer six split my card eight');
+  eq(t.act(), 'STAND', 'maxHands 2: 8,8 after split can\'t resplit -> hard 16 v6 STAND');
+  t.say('split');
+  eq(t.G.hands.length, 2, 'split ignored at max hands');
+
+  // split aces: one card each, auto-advance, 21 is not blackjack
+  t = session(SET());
+  t.say('my card ace ace dealer card nine');
+  eq(t.act(), 'SPLIT', 'A,A v9 -> SPLIT');
+  t.say('split my card king');
+  eq([t.G.hands[0].status, t.G.active, t.G.hands[0].cards], ['21', 1, ['A', 'K']], 'split A + K = 21 (not blackjack), auto-advance');
+  t.say('my card five');
+  eq([t.G.hands[1].status, C.allDone(t.G)], ['split aces', true], 'split ace gets one card then done');
+  t = session(SET());
+  t.say('my card ace ace dealer card six split my card ace');
+  eq([t.G.hands[0].status, t.G.active], ['split aces', 1], 'resplit aces off: A,A on split ace just finishes');
+  t = session(SET({ resplitAces: true }));
+  t.say('my card ace ace dealer card six split my card ace');
+  eq([t.G.active, t.act()], [0, 'SPLIT'], 'resplit aces on: waits with SPLIT advice');
+  t.say('split');
+  eq(t.G.hands.map(h => h.cards), [['A'], ['A'], ['A']], 'resplit aces -> 3 hands');
+  t = session(SET({ hitSplitAces: true }));
+  t.say('my card ace ace dealer card six split my card five');
+  eq([t.G.active, t.act()], [0, 'HIT'], 'hit split aces on: A,5 v6 stays, HIT (no double on split aces)');
+
+  // persistence-shaped state survives JSON round-trip
+  t = session(SET());
+  t.say('my card eight eight dealer six split my card three double');
+  const g2 = JSON.parse(JSON.stringify(t.G));
+  eq(C.handAdvice(g2, 0, SET(), 0).state, 'doubling', 'state round-trips through JSON (localStorage)');
+  eq(P('done'), ['cmd:stand'], "parse 'done' -> stand");
+}
+
 // ---------------- Report ----------------
 console.log(`Chart cells checked: ${chartCells} across ${CONFIGS.length} rule sets`);
 if (fails.length) { console.log(fails.map(f => 'FAIL ' + f).join('\n')); }

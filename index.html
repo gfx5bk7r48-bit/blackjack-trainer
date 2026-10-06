@@ -58,8 +58,16 @@
   #cards{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
   #cards button{height:58px;font-size:25px;font-weight:900;background:#f1f5f9;color:#0f172a}
   #cards button.ten{background:#e2e8f0}
-  .actions{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:8px}
-  .actions button{padding:12px 2px;font-size:14px;font-weight:700}
+  .actions{display:grid;grid-template-columns:1fr 1fr 1.6fr;gap:6px;margin-top:8px}
+  .actions button{padding:13px 2px;font-size:15px;font-weight:800}
+  .actions button:disabled{opacity:.35}
+  #recHand{font-size:15px;font-weight:800;color:#fbbf24;letter-spacing:.5px;text-transform:uppercase;min-height:0}
+  .hand{border:2px solid #24314f;border-radius:12px;padding:8px 10px;margin:6px 0;background:#111a2b}
+  .hand.active{border-color:#fbbf24;background:#1f2a44;box-shadow:0 0 0 2px rgba(251,191,36,.25)}
+  .hand.isdone{opacity:.6}
+  .hand .hd{display:flex;justify-content:space-between;align-items:center;font-weight:800;font-size:15px}
+  .pill{padding:3px 10px;border-radius:999px;background:#334155;font-size:13px;font-weight:800}
+  .pill.done{background:#1e293b;color:#cbd5e1}
   #recent{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
   footer{color:var(--muted);font-size:12px;text-align:center;padding:10px 4px 20px}
   #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#0f172a;border:1px solid #334155;padding:10px 16px;border-radius:12px;font-weight:700;opacity:0;transition:opacity .2s;pointer-events:none;z-index:50;max-width:90vw;text-align:center}
@@ -88,6 +96,7 @@
 </header>
 
 <section class="panel" id="recBox">
+  <div id="recHand"></div>
   <div id="recWord">—</div>
   <div id="recWhy">Enter your two cards and the dealer's upcard</div>
   <div id="recDev" style="display:none"></div>
@@ -110,8 +119,8 @@
 
 <section class="panel">
   <div class="row"><span class="lbl">Dealer</span><span id="dealerCards"></span></div>
-  <div class="row"><span class="lbl">Me</span><span id="myCards"></span><span class="total" id="myTotal"></span></div>
-  <div class="hands-mini" id="handsMini"></div>
+  <div class="row" id="meRow"><span class="lbl">Me</span><span id="myCards"></span><span class="total" id="myTotal"></span></div>
+  <div id="handsList"></div>
   <div style="margin-top:8px;border-top:1px solid #24314f;padding-top:8px">
     <div id="heard"><span style="color:var(--muted)">Heard:</span> <span class="q" id="heardText">(nothing yet)</span></div>
     <div id="interim"></div>
@@ -128,10 +137,11 @@
   </div>
   <div id="cards"></div>
   <div class="actions">
+    <button id="splitBtn" style="background:#6b21a8">Split</button>
+    <button id="doubleBtn" style="background:#92400e">Double</button>
+    <button id="nextBtn" style="background:#1d4ed8">Stand / Next hand ▶</button>
     <button id="undoBtn">↶ Undo</button>
     <button id="newHandBtn">New hand</button>
-    <button id="splitBtn">Split</button>
-    <button id="nextBtn">Next ▶</button>
     <button id="newShoeBtn" style="background:#7f1d1d">New shoe</button>
   </div>
 </section>
@@ -152,6 +162,8 @@
     <div class="field"><label>Double after split (DAS)</label><input type="checkbox" id="s_das"></div>
     <div class="field"><label>Late surrender</label><input type="checkbox" id="s_ls"></div>
     <div class="field"><label>Max hands after splits</label><input type="number" id="s_maxHands" min="2" max="4" step="1"></div>
+    <div class="field"><label>Hit split aces<small>Off = one card on each split ace</small></label><input type="checkbox" id="s_hitSplitAces"></div>
+    <div class="field"><label>Resplit aces</label><input type="checkbox" id="s_resplitAces"></div>
     <h3>Counting</h3>
     <div class="field"><label>Index plays (Illustrious 18 + Fab 4)<small>Deviations from basic strategy based on true count</small></label><input type="checkbox" id="s_dev"></div>
     <div class="field"><label>Betting unit ($)</label><input type="number" id="s_unit" min="1" step="1"></div>
@@ -166,7 +178,7 @@
       • <code>seven</code>, <code>king ace four</code>: other players' cards (count only)<br>
       • One sentence can mix them: <code>my card jack five dealer nine</code>. Say <code>other</code> to switch back to other players' cards in the same breath.<br>
       • <code>new hand</code> (count kept) · <code>new shoe</code> / <code>shuffle</code> (count reset) · <code>undo</code><br>
-      • <code>split</code> splits your pair; <code>next</code> or <code>stand</code> moves to your next split hand.<br>
+      • <code>split</code> makes Hand 1 and Hand 2 (one pair card each). Say each hand's cards with <code>my card …</code>; advice shows for the highlighted hand. <code>double</code> = one more card, then it moves on. <code>stand</code> / <code>next</code> / <code>done</code> moves to the next hand. Bust, 21 and split aces move on automatically.<br>
       Count: Hi-Lo (2–6 = +1, 7–9 = 0, 10/J/Q/K/A = −1). True count = running ÷ decks left, rounded down for bets and index plays.<br>
       If the mic misbehaves, use the buttons: pick <b>Mine / Dealer / Other</b>, then tap cards.
     </div>
@@ -292,7 +304,7 @@ var BJCore = (function () {
       if (cards.length === 2 && !split) return { action: 'BLACKJACK', code: null, label: 'Blackjack!', deviation: null };
       return { action: 'STAND', code: 'S', label: '21 vs ' + upLabel(up), deviation: null };
     }
-    var canDouble = cards.length === 2 && (!split || !!rules.das);
+    var canDouble = cards.length === 2 && (!split || !!rules.das) && !hand.splitAces;
     var canSplit = info.pair && cards.length === 2 && rules.canSplitMore !== false;
     var canSur = !!rules.ls && cards.length === 2 && !split;
     var code = rawAction(cards, up, rules);
@@ -339,6 +351,99 @@ var BJCore = (function () {
   function insurance(up, rules, tc) {
     if (!up || cardValue(up) !== 11 || !rules.dev || typeof tc !== 'number') return null;
     return tc >= 3;
+  }
+
+  // ---- Hand / split workflow (pure state machine; UI and tests share it)
+  // state G: {rc, seen, hands:[hand], active, dealer:[ranks], recent:[]}
+  // hand: {cards, split, splitAces, doubled, done, status}
+  function newHand(cards, split, aces) { return { cards: cards || [], split: !!split, splitAces: !!aces, doubled: false, done: false, status: '' }; }
+  function freshState() { return { rc: 0, seen: 0, hands: [newHand()], active: 0, dealer: [], recent: [] }; }
+  function maxHands(S) { return S.maxHands || 4; }
+  function allDone(G) { for (var i = 0; i < G.hands.length; i++) if (!G.hands[i].done) return false; return true; }
+  function hasNext(G) { for (var j = G.active + 1; j < G.hands.length; j++) if (!G.hands[j].done) return true; return false; }
+  function advance(G) { for (var j = G.active + 1; j < G.hands.length; j++) if (!G.hands[j].done) { G.active = j; return true; } return false; }
+  function finish(G, status) { var h = G.hands[G.active]; h.done = true; h.status = status; return advance(G); }
+  function canSplitHand(G, S, h) {
+    var info = handInfo(h.cards);
+    if (!info.pair || h.done || h.doubled) return false;
+    if (G.hands.length >= maxHands(S)) return false;
+    if (h.splitAces && !S.resplitAces) return false;
+    return true;
+  }
+  function rulesFor(G, S, h) { return { h17: !!S.h17, das: !!S.das, ls: !!S.ls, dev: !!S.dev, canSplitMore: canSplitHand(G, S, h) }; }
+  // after a card lands on the active hand: auto-finish + advance where the hand can't take more decisions
+  function autoCheck(G, S) {
+    var h = G.hands[G.active], info = handInfo(h.cards);
+    if (info.bust) return finish(G, 'bust');
+    if (h.doubled && h.cards.length >= 3) return finish(G, 'doubled');
+    if (info.total === 21) return finish(G, (h.cards.length === 2 && !h.split) ? 'blackjack' : '21');
+    if (h.splitAces && !S.hitSplitAces && h.cards.length >= 2) {
+      if (canSplitHand(G, S, h)) return false; // pair of aces again and resplit allowed: wait for split/next
+      return finish(G, 'split aces');
+    }
+    return false;
+  }
+  var STATUS_TEXT = { bust: 'BUST', blackjack: 'BLACKJACK', '21': '21', doubled: 'DOUBLED', 'split aces': 'SPLIT ACES', stand: 'STOOD', surrender: 'SURRENDERED' };
+  // step(G, H, event, S) -> {G, msg, ignored}. H = undo stack of JSON snapshots (mutated).
+  function step(G, H, e, S) {
+    if (e.type === 'cmd' && e.cmd === 'undo') {
+      if (!H.length) return { G: G, msg: 'nothing to undo', ignored: true };
+      return { G: JSON.parse(H.pop()), msg: 'undo' };
+    }
+    var snap = JSON.stringify(G), g = JSON.parse(snap), msg = '', h, prev;
+    var ign = function (m) { return { G: G, msg: m, ignored: true }; };
+    if (e.type === 'card') {
+      g.rc += hiLo(e.rank); g.seen++;
+      g.recent.push({ r: e.rank, o: e.owner }); if (g.recent.length > 24) g.recent.shift();
+      if (e.owner === 'me') {
+        if (allDone(g)) { g.hands = [newHand()]; g.active = 0; g.dealer = []; msg = 'new round · '; }
+        prev = g.active; h = g.hands[g.active]; h.cards.push(e.rank);
+        msg += (g.hands.length > 1 ? 'Hand ' + (prev + 1) + ' ' : 'Mine ') + e.rank;
+        var moved = autoCheck(g, S);
+        if (h.done) msg += ' → ' + (STATUS_TEXT[h.status] || h.status) + (moved ? ' → Hand ' + (g.active + 1) : '');
+      } else if (e.owner === 'dealer') { g.dealer.push(e.rank); msg = 'Dealer ' + e.rank; }
+      else msg = e.rank;
+    } else {
+      h = g.hands[g.active];
+      switch (e.cmd) {
+        case 'newHand': g.hands = [newHand()]; g.active = 0; g.dealer = []; msg = 'new hand'; break;
+        case 'newShoe': g = freshState(); msg = 'NEW SHOE (count reset)'; break;
+        case 'split': {
+          if (h.cards.length !== 2 || !handInfo(h.cards).pair) return ign('split ignored: need a pair');
+          if (!canSplitHand(g, S, h)) return ign(g.hands.length >= maxHands(S) ? 'split ignored: max hands' : 'split ignored');
+          var aces = h.cards[0] === 'A';
+          g.hands.splice(g.active, 1, newHand([h.cards[0]], true, aces), newHand([h.cards[1]], true, aces));
+          msg = 'split → Hand ' + (g.active + 1) + ' of ' + g.hands.length; break;
+        }
+        case 'double':
+          if (h.done || h.cards.length !== 2 || h.doubled) return ign('double ignored: needs a 2-card hand');
+          h.doubled = true; msg = 'double: next card ends Hand ' + (g.active + 1); break;
+        case 'nextHand':
+          if (!hasNext(g)) { g.hands = [newHand()]; g.active = 0; g.dealer = []; msg = 'new hand'; break; }
+          /* falls through */
+        case 'stand': case 'next':
+          if (h.done) return ign('all hands done');
+          prev = g.active;
+          var mv = finish(g, 'stand');
+          msg = (g.hands.length > 1 ? 'Hand ' + (prev + 1) + ' stood' : 'stood') + (mv ? ' → Hand ' + (g.active + 1) : ''); break;
+        case 'surrender':
+          if (h.done || h.cards.length !== 2 || h.split) return ign('surrender ignored');
+          finish(g, 'surrender'); msg = 'surrender'; break;
+        default:
+          return ign(e.cmd); // hit / insurance: acknowledged, nothing to change
+      }
+    }
+    H.push(snap); if (H.length > 200) H.shift();
+    return { G: g, msg: msg };
+  }
+  // advice for hand i in context
+  function handAdvice(G, i, S, tc) {
+    var h = G.hands[i], up = G.dealer[0] || null, info = handInfo(h.cards);
+    var base = { total: info.total, soft: info.soft && info.total < 21, cards: h.cards, index: i };
+    if (h.done) { base.state = 'done'; base.status = h.status; return base; }
+    if (h.doubled) { base.state = 'doubling'; return base; }
+    if (h.cards.length < 2 || !up) { base.state = 'waiting'; base.need = h.cards.length < 2 ? 'card' : 'upcard'; return base; }
+    base.state = 'advice'; base.d = decide(h, up, rulesFor(G, S, h), tc); return base;
   }
 
   // ---- Shoe math
@@ -394,7 +499,7 @@ var BJCore = (function () {
   ];
   var SINGLE = {
     shuffle: 'newShoe', reshuffle: 'newShoe', shuffled: 'newShoe',
-    undo: 'undo', oops: 'undo', delete: 'undo',
+    undo: 'undo', oops: 'undo', delete: 'undo', done: 'stand', finished: 'stand',
     split: 'split', splits: 'split', splitting: 'split',
     next: 'next',
     hit: 'hit', stand: 'stand', stay: 'stand', double: 'double', surrender: 'surrender', insurance: 'insurance'
@@ -451,7 +556,8 @@ var BJCore = (function () {
     RANKS: RANKS, cardValue: cardValue, hiLo: hiLo, handInfo: handInfo,
     rawHard: rawHard, rawSoft: rawSoft, rawPair: rawPair, rawAction: rawAction,
     decide: decide, insurance: insurance, shoeStats: shoeStats, parseRamp: parseRamp, betUnits: betUnits,
-    parsePhrase: parsePhrase, tokenize: tokenize, playIndices: playIndices, surrenderIndices: surrenderIndices
+    parsePhrase: parsePhrase, tokenize: tokenize, playIndices: playIndices, surrenderIndices: surrenderIndices,
+    freshState: freshState, step: step, handAdvice: handAdvice, canSplitHand: canSplitHand, rulesFor: rulesFor, allDone: allDone, STATUS_TEXT: STATUS_TEXT
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   return api;
@@ -463,7 +569,7 @@ var BJCore = (function () {
 (function () {
   'use strict';
   var C = BJCore;
-  var DEFAULTS = { decks: 8, pen: 75, burn: 6, unit: 10, ramp: '2,4,6,8', h17: false, das: true, ls: false, dev: true, speak: true, maxHands: 4, owner: 'me' };
+  var DEFAULTS = { decks: 8, pen: 75, burn: 6, unit: 10, ramp: '2,4,6,8', h17: false, das: true, ls: false, dev: true, speak: true, maxHands: 4, hitSplitAces: false, resplitAces: false, owner: 'me' };
   function load(k, d) { try { var v = JSON.parse(localStorage.getItem(k)); return v || d; } catch (e) { return d; } }
   function save() {
     try {
@@ -472,58 +578,24 @@ var BJCore = (function () {
       localStorage.setItem('bjt_hist', JSON.stringify(H.slice(-60)));
     } catch (e) {}
   }
-  function fresh() { return { rc: 0, seen: 0, hands: [{ cards: [], split: false }], active: 0, dealer: [], recent: [] }; }
   var S = Object.assign({}, DEFAULTS, load('bjt_settings', {}));
-  var G = Object.assign(fresh(), load('bjt_state', {}));
+  var G = Object.assign(C.freshState(), load('bjt_state', {}));
   var H = load('bjt_hist', []);
-  if (!Array.isArray(G.hands) || !G.hands.length) G.hands = [{ cards: [], split: false }];
+  if (!Array.isArray(G.hands) || !G.hands.length) { G.hands = C.freshState().hands; G.active = 0; }
+  if (G.active >= G.hands.length) G.active = G.hands.length - 1;
 
   var $ = function (id) { return document.getElementById(id); };
   function toast(msg) { var t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(function () { t.classList.remove('show'); }, 1600); }
-  function snap() { H.push(JSON.stringify(G)); if (H.length > 200) H.shift(); }
-  function rules() { return { h17: S.h17, das: S.das, ls: S.ls, dev: S.dev, canSplitMore: G.hands.length < S.maxHands }; }
-  function curHand() { return G.hands[G.active] || G.hands[0]; }
+  function rules() { return { h17: S.h17, das: S.das, ls: S.ls, dev: S.dev }; }
 
   // ---------- events ----------
-  function applyEvent(e) {
-    if (e.type === 'cmd' && e.cmd === 'undo') {
-      if (!H.length) { toast('Nothing to undo'); return 'undo (nothing)'; }
-      G = JSON.parse(H.pop()); return 'undo';
-    }
-    if (e.type === 'card') {
-      snap();
-      G.rc += C.hiLo(e.rank); G.seen++;
-      if (e.owner === 'me') curHand().cards.push(e.rank);
-      else if (e.owner === 'dealer') G.dealer.push(e.rank);
-      G.recent.push({ r: e.rank, o: e.owner }); if (G.recent.length > 24) G.recent.shift();
-      return (e.owner === 'me' ? 'Mine ' : e.owner === 'dealer' ? 'Dealer ' : '') + e.rank;
-    }
-    switch (e.cmd) {
-      case 'newHand':
-        snap(); G.hands = [{ cards: [], split: false }]; G.active = 0; G.dealer = []; lastSpoken = ''; return 'new hand';
-      case 'nextHand':
-        if (G.active < G.hands.length - 1) { snap(); G.active++; return 'next split hand'; }
-        snap(); G.hands = [{ cards: [], split: false }]; G.active = 0; G.dealer = []; lastSpoken = ''; return 'new hand';
-      case 'newShoe':
-        snap(); G = fresh(); lastSpoken = ''; return 'NEW SHOE (count reset)';
-      case 'split': {
-        var h = curHand(), info = C.handInfo(h.cards);
-        if (!info.pair) { toast('Split needs a pair'); return 'split (no pair)'; }
-        if (G.hands.length >= S.maxHands) { toast('Max hands reached'); return 'split (max hands)'; }
-        snap();
-        G.hands.splice(G.active, 1, { cards: [h.cards[0]], split: true }, { cards: [h.cards[1]], split: true });
-        return 'split';
-      }
-      case 'next': case 'stand':
-        if (G.active < G.hands.length - 1) { snap(); G.active++; return e.cmd + ' → next hand'; }
-        return e.cmd;
-      default:
-        return e.cmd; // hit / double / surrender / insurance are acknowledged only
-    }
-  }
   function applyEvents(evs) {
     var out = [];
-    evs.forEach(function (e) { out.push(applyEvent(e)); });
+    evs.forEach(function (e) {
+      var r = C.step(G, H, e, S);
+      G = r.G; out.push(r.msg);
+      if (r.ignored && e.type === 'cmd' && e.cmd !== 'hit' && e.cmd !== 'insurance') toast(r.msg);
+    });
     render(); save();
     return out;
   }
@@ -546,46 +618,66 @@ var BJCore = (function () {
 
     var up = G.dealer[0] || null;
     $('dealerCards').innerHTML = G.dealer.length ? G.dealer.map(function (r, i) { return chip(r, 'dealer' + (i ? ' small' : '')); }).join(' ') : '<span style="color:var(--muted)">no upcard</span>';
-    var h = curHand();
+    var multi = G.hands.length > 1;
+    var advs = G.hands.map(function (x, i) { return C.handAdvice(G, i, S, st.tcFloor); });
+    var a = advs[G.active], h = G.hands[G.active];
+    $('meRow').style.display = multi ? 'none' : 'flex';
     $('myCards').innerHTML = h.cards.length ? h.cards.map(function (r) { return chip(r); }).join(' ') : '<span style="color:var(--muted)">no cards</span>';
-    var info = C.handInfo(h.cards);
-    $('myTotal').textContent = h.cards.length ? ((info.soft && info.total < 21 ? 'Soft ' : '') + info.total) : '';
-    if (G.hands.length > 1) {
-      $('handsMini').innerHTML = 'Split hands: ' + G.hands.map(function (x, i) {
-        var t = x.cards.length ? x.cards.join(' ') + ' (' + C.handInfo(x.cards).total + ')' : '…';
-        return i === G.active ? '<b>▶ ' + t + '</b>' : t;
-      }).join(' · ') + ' &nbsp;(say “next”)';
-    } else $('handsMini').textContent = '';
+    $('myTotal').textContent = h.cards.length ? ((a.soft ? 'Soft ' : '') + a.total) : '';
+    $('handsList').innerHTML = !multi ? '' : advs.map(function (x, i) {
+      var hh = G.hands[i], isA = i === G.active && !hh.done, right;
+      if (x.state === 'done') right = '<span class="pill done">' + (C.STATUS_TEXT[x.status] || x.status) + ' ✓</span>';
+      else if (x.state === 'doubling') right = '<span class="pill" style="background:var(--double);color:#111">DOUBLED · 1 card</span>';
+      else if (x.state === 'waiting') right = '<span class="pill">' + (x.need === 'card' ? 'needs 2nd card' : 'needs upcard') + '</span>';
+      else right = '<span class="pill" style="background:' + (COLORS[x.d.action] || '#334155') + ';color:#111">' + x.d.action + '</span>';
+      return '<div class="hand' + (isA ? ' active' : '') + (hh.done ? ' isdone' : '') + '">' +
+        '<div class="hd"><span>' + (isA ? '▶ ' : '') + 'Hand ' + (i + 1) + (hh.doubled ? ' · 2×' : '') + '</span>' + right + '</div>' +
+        '<div class="row" style="margin:4px 0 0">' + hh.cards.map(function (r) { return chip(r, 'small'); }).join(' ') +
+        '<span class="total" style="font-size:17px">' + (hh.cards.length ? (x.soft ? 'Soft ' : '') + x.total : '') + '</span></div></div>';
+    }).join('');
 
     $('recent').innerHTML = G.recent.slice(-16).map(function (c) { return chip(c.r, 'small ' + (c.o === 'me' ? '' : c.o)); }).join('');
 
-    var d = C.decide(h, up, rules(), st.tcFloor);
-    var box = $('recBox'), word = $('recWord');
+    var box = $('recBox'), word = $('recWord'), d = a.state === 'advice' ? a.d : null;
+    var allDone = C.allDone(G);
+    $('recHand').textContent = multi ? (allDone ? 'All ' + G.hands.length + ' hands done' : 'Hand ' + (G.active + 1) + ' of ' + G.hands.length) : '';
+    $('recDev').style.display = 'none';
     if (d) {
       word.textContent = d.action; word.style.color = COLORS[d.action] || '';
       box.style.borderColor = COLORS[d.action] || '#334155';
-      $('recWhy').textContent = d.label + (d.code === 'H' && d.basic === 'D' ? ' · double not allowed now' : '');
+      var note = '';
+      if (h.split && d.action !== 'SPLIT') note = d.code === 'H' && d.basic === 'D' ? ' · no double here' : '';
+      else if (d.code === 'H' && d.basic === 'D') note = ' · double not allowed now';
+      $('recWhy').textContent = d.label + note;
       if (d.deviation) { $('recDev').style.display = 'inline-block'; $('recDev').textContent = (d.deviation.changed ? 'INDEX PLAY · ' : 'index · ') + d.deviation.text; $('recDev').style.background = d.deviation.changed ? '#7c3aed' : '#334155'; }
-      else $('recDev').style.display = 'none';
+    } else if (a.state === 'doubling') {
+      word.textContent = 'DOUBLED'; word.style.color = 'var(--double)'; box.style.borderColor = 'var(--double)';
+      $('recWhy').textContent = 'Say your one double card' + (multi ? ' (then on to the next hand)' : '');
+    } else if (a.state === 'done') {
+      word.textContent = 'DONE'; word.style.color = '#94a3b8'; box.style.borderColor = '#334155';
+      $('recWhy').textContent = (multi ? '' : (C.STATUS_TEXT[a.status] || a.status) + ' · ') + 'say “new hand” (or just your next card)';
     } else {
       word.textContent = '—'; word.style.color = ''; box.style.borderColor = '#334155';
-      $('recWhy').textContent = !up && h.cards.length < 2 ? 'Enter your two cards and the dealer\'s upcard' : !up ? 'Waiting for dealer upcard' : 'Waiting for your second card';
-      $('recDev').style.display = 'none';
+      $('recWhy').textContent = multi ? 'Hand ' + (G.active + 1) + ': ' + (a.need === 'card' ? 'say your second card' : 'waiting for dealer upcard')
+        : (!up && h.cards.length < 2 ? 'Enter your two cards and the dealer\'s upcard' : !up ? 'Waiting for dealer upcard' : 'Waiting for your second card');
     }
     var ins = C.insurance(up, rules(), st.tcFloor);
     $('insBox').innerHTML = ins === null ? '' : ins ? '<span style="color:#4ade80">TAKE INSURANCE (TC ≥ +3)</span>' : '<span style="color:var(--muted)">No insurance</span>';
+    $('splitBtn').disabled = !(h.cards.length === 2 && C.canSplitHand(G, S, h));
+    $('doubleBtn').disabled = !(h.cards.length === 2 && !h.done && !h.doubled);
 
     // owner seg / toggles
     Array.prototype.forEach.call(document.querySelectorAll('#ownerSeg button'), function (b) { b.classList.toggle('sel', b.dataset.o === S.owner); });
     $('spkBtn').textContent = S.speak ? '🔊' : '🔇';
 
     // speak
-    if (d && S.speak) {
-      var key = G.active + '|' + h.cards.join(',') + '|' + up + '|' + d.action;
+    if (S.speak) {
+      var key = G.hands.length + '|' + G.active + '|' + h.cards.join(',') + '|' + up + '|' + a.state + '|' + (d ? d.action : '');
       if (key !== lastSpoken) {
+        var prevActive = lastSpoken.split('|')[1];
         lastSpoken = key;
-        // speak whenever the advice is (re)computed for a new card
-        say(d.action === 'BLACKJACK' ? 'Blackjack' : d.action.charAt(0) + d.action.slice(1).toLowerCase() + (ins ? '. Take insurance' : ''));
+        if (d) say((multi ? 'Hand ' + (G.active + 1) + ', ' : '') + (d.action === 'BLACKJACK' ? 'Blackjack' : d.action.charAt(0) + d.action.slice(1).toLowerCase()) + (ins ? '. Take insurance' : ''));
+        else if (multi && a.state === 'waiting' && prevActive !== String(G.active)) say('Hand ' + (G.active + 1));
       }
     }
   }
@@ -686,12 +778,12 @@ var BJCore = (function () {
     b.addEventListener('click', function () { S.owner = b.dataset.o; render(); save(); });
   });
   function cmdBtn(id, cmd) { $(id).addEventListener('click', function () { var out = applyEvents([{ type: 'cmd', cmd: cmd }]); $('parsed').textContent = '→ (tap) ' + out.join(' · '); }); }
-  cmdBtn('undoBtn', 'undo'); cmdBtn('newHandBtn', 'newHand'); cmdBtn('splitBtn', 'split'); cmdBtn('nextBtn', 'next');
+  cmdBtn('undoBtn', 'undo'); cmdBtn('newHandBtn', 'newHand'); cmdBtn('splitBtn', 'split'); cmdBtn('nextBtn', 'next'); cmdBtn('doubleBtn', 'double');
   $('newShoeBtn').addEventListener('click', function () { if (confirm('Start a new shoe? This resets the count.')) { applyEvents([{ type: 'cmd', cmd: 'newShoe' }]); toast('New shoe'); } });
   $('micBtn').addEventListener('click', toggleMic);
   $('spkBtn').addEventListener('click', function () { S.speak = !S.speak; if (S.speak) primeTTS(); else try { speechSynthesis.cancel(); } catch (e) {} render(); save(); });
 
-  var FIELDS = ['decks', 'pen', 'burn', 'unit', 'ramp', 'h17', 'das', 'ls', 'dev', 'speak', 'maxHands'];
+  var FIELDS = ['decks', 'pen', 'burn', 'unit', 'ramp', 'h17', 'das', 'ls', 'dev', 'speak', 'maxHands', 'hitSplitAces', 'resplitAces'];
   function fillSettings() { FIELDS.forEach(function (f) { var el = $('s_' + f); if (el.type === 'checkbox') el.checked = !!S[f]; else el.value = S[f]; }); }
   FIELDS.forEach(function (f) {
     $('s_' + f).addEventListener('change', function (ev) {

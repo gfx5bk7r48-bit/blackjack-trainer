@@ -9,10 +9,13 @@ A single-file practice tool (`index.html`, no build, no server). Say or tap the 
 - `dealer card six` / `dealer six`: dealer's upcard (later dealer cards still count)
 - `seven`, `king ace four`: other players' cards (count only)
 - Mix them in one sentence: `my card jack five dealer nine`. Say `other` to switch back.
-- `new hand` (keeps count), `new shoe` / `shuffle` (resets count), `undo`, `split`, `next` / `stand` (next split hand)
+- `new hand` (keeps count), `new shoe` / `shuffle` (resets count), `undo`
+- Splits: `split` creates Hand 1 / Hand 2 (one pair card each, active hand highlighted). `my card X` goes to the active hand and its advice (double / split again / hit / stand) shows as soon as it has 2 cards. `double` takes exactly one more card then moves on; `stand` / `next` / `done` moves on; bust, 21 and split aces (one card each by default) move on automatically.
+
+![split view](split-view.png)
 
 ## Rules / tables
 4–8 deck basic strategy, S17 or H17, DAS on/off, late surrender on/off. Index plays: Schlesinger's Illustrious 18 + Fab 4 (S17 values, with H17 changes for 11vA, 10vA, 12v6, 15vA surrender). True count is rounded down for bets and index plays.
 
 ## Tests
-`node tests/test.js` checks the engine against reference charts for 8 rule sets (4,000 chart cells) plus index plays, count math, and the phrase parser.
+`node tests/test.js` checks the engine against reference charts for 8 rule sets (4,000 chart cells) plus index plays, count math, the phrase parser, and the split workflow (resplit, split aces, auto-advance, undo).
